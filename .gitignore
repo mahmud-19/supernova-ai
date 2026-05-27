@@ -19,11 +19,6 @@ env/
 /backend/storage/
 /backend/uvicorn.*.log
 
-# Large Deep Learning Weights
-*.pth
-*.pt
-*.bin
-*.pkl
 
 # Editor / System Files
 .vscode/
