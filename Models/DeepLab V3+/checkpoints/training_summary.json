@@ -1,0 +1,19 @@
+{
+  "model": "DeepLabV3+",
+  "encoder": "resnet50",
+  "total_epochs": 500,
+  "best_val_dice": 0.9039318748882839,
+  "best_epoch": 44,
+  "final_val_dice": 0.8938519409724645,
+  "final_val_iou": 0.8122729795319693,
+  "train_samples": 1402,
+  "val_samples": 279,
+  "test_samples": 194,
+  "image_size": [
+    256,
+    256
+  ],
+  "batch_size": 8,
+  "device": "cuda",
+  "training_time_hours": 0.76
+}
