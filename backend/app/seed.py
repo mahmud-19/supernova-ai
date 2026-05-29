@@ -8,16 +8,16 @@ from app.models import User, UserRole
 DEMO_USERS = [
     {
         "full_name": "Dr. Kim",
-        "email": "sonologist@demo.com",
+        "email": "sonologist@supernova.com",
         "username": "sonologist",
-        "password": "Passw0rd!",
+        "password": "12345678",
         "role": UserRole.sonologist,
     },
     {
         "full_name": "Dr. Lee",
-        "email": "reviewer@demo.com",
+        "email": "reviewer@supernova.com",
         "username": "reviewer",
-        "password": "Passw0rd!",
+        "password": "12345678",
         "role": UserRole.expert_reviewer,
     },
 ]

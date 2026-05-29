@@ -32,11 +32,31 @@ export function Upload() {
     setErrors(e => ({ ...e, file: '' }));
   }
 
+  function getValidationError(field: string, value: any) {
+    if (field === 'file') return value ? '' : 'Ultrasound image is required.';
+    if (field === 'patientId') return value.trim() ? '' : 'Patient ID is required.';
+    if (field === 'patientName') return value.trim() ? '' : 'Patient name is required.';
+    if (field === 'age') return value.trim() ? '' : 'Age is required.';
+    if (field === 'gender') return value ? '' : 'Gender is required.';
+    if (field === 'examDate') return value ? '' : 'Exam date is required.';
+    return '';
+  }
+
+  const isFormValid = !!file &&
+    !!patientId.trim() &&
+    !!patientName.trim() &&
+    !!age.trim() &&
+    !!gender &&
+    !!examDate &&
+    !Object.values(errors).some(err => !!err);
+
   function validate() {
     const e: Record<string, string> = {};
-    if (!file) e.file = 'Please select an image.';
-    if (!patientId.trim()) e.patientId = 'Patient ID suffix is required.';
+    if (!file) e.file = 'Ultrasound image is required.';
+    if (!patientId.trim()) e.patientId = 'Patient ID is required.';
     if (!patientName.trim()) e.patientName = 'Patient name is required.';
+    if (!age.trim()) e.age = 'Age is required.';
+    if (!gender) e.gender = 'Gender is required.';
     if (!examDate) e.examDate = 'Exam date is required.';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -62,7 +82,13 @@ export function Upload() {
       toast('success', 'AI inference complete. Reviewing results.');
       navigate(`/cases/${uploaded.id}/segmentation`);
     } catch (err: any) {
-      toast('error', err.response?.data?.detail || 'Upload or inference failed.');
+      const errMsg = err.response?.data?.detail || 'Upload or inference failed.';
+      if (errMsg.includes('Patient ID already exists')) {
+        setErrors(prev => ({ ...prev, patientId: 'This Patient ID already exists.' }));
+        toast('error', 'This Patient ID already exists.');
+      } else {
+        toast('error', errMsg);
+      }
     } finally {
       setBusy(false);
     }
@@ -98,7 +124,11 @@ export function Upload() {
                       id="upload-patient-id"
                       placeholder="00123"
                       value={patientId}
-                      onChange={e => { setPatientId(e.target.value); setErrors(p => ({ ...p, patientId: '' })); }}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setPatientId(val);
+                        setErrors(p => ({ ...p, patientId: getValidationError('patientId', val) }));
+                      }}
                       className={errors.patientId ? 'field-error' : ''}
                       aria-describedby={errors.patientId ? 'pid-error' : undefined}
                     />
@@ -112,7 +142,11 @@ export function Upload() {
                     id="upload-patient-name"
                     placeholder="Full name"
                     value={patientName}
-                    onChange={e => { setPatientName(e.target.value); setErrors(p => ({ ...p, patientName: '' })); }}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setPatientName(val);
+                      setErrors(p => ({ ...p, patientName: getValidationError('patientName', val) }));
+                    }}
                     className={errors.patientName ? 'field-error' : ''}
                   />
                   {errors.patientName && <span className="field-error-msg">{errors.patientName}</span>}
@@ -121,16 +155,40 @@ export function Upload() {
                 <div className="form-row-2">
                   <div>
                     <label htmlFor="upload-age">Age</label>
-                    <input id="upload-age" type="number" min={0} max={150} placeholder="45" value={age} onChange={e => setAge(e.target.value)} />
+                    <input
+                      id="upload-age"
+                      type="number"
+                      min={0}
+                      max={150}
+                      placeholder="45"
+                      value={age}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setAge(val);
+                        setErrors(p => ({ ...p, age: getValidationError('age', val) }));
+                      }}
+                      className={errors.age ? 'field-error' : ''}
+                    />
+                    {errors.age && <span className="field-error-msg">{errors.age}</span>}
                   </div>
                   <div>
                     <label htmlFor="upload-gender">Gender</label>
-                    <select id="upload-gender" value={gender} onChange={e => setGender(e.target.value)}>
+                    <select
+                      id="upload-gender"
+                      value={gender}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setGender(val);
+                        setErrors(p => ({ ...p, gender: getValidationError('gender', val) }));
+                      }}
+                      className={errors.gender ? 'field-error' : ''}
+                    >
                       <option value="">— select —</option>
                       <option value="male">Male</option>
                       <option value="female">Female</option>
                       <option value="other">Other</option>
                     </select>
+                    {errors.gender && <span className="field-error-msg">{errors.gender}</span>}
                   </div>
                 </div>
 
@@ -140,7 +198,11 @@ export function Upload() {
                     id="upload-exam-date"
                     type="date"
                     value={examDate}
-                    onChange={e => { setExamDate(e.target.value); setErrors(p => ({ ...p, examDate: '' })); }}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setExamDate(val);
+                      setErrors(p => ({ ...p, examDate: getValidationError('examDate', val) }));
+                    }}
                     className={errors.examDate ? 'field-error' : ''}
                   />
                   {errors.examDate && <span className="field-error-msg">{errors.examDate}</span>}
@@ -161,7 +223,7 @@ export function Upload() {
               />
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={busy}>
+            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={busy || !isFormValid}>
               {busy ? (
                 <>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>

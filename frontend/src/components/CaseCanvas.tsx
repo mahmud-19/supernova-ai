@@ -17,23 +17,75 @@ function useHtmlImage(url?: string) {
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 8;
 
+function useColorizedMask(maskUrl?: string, color: string = '#20a75a') {
+  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (!maskUrl) {
+      setCanvas(null);
+      return;
+    }
+    const img = new window.Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      const display = document.createElement('canvas');
+      display.width = img.width || 512;
+      display.height = img.height || 512;
+      const dctx = display.getContext('2d');
+      if (dctx) {
+        dctx.drawImage(img, 0, 0);
+        const imgData = dctx.getImageData(0, 0, display.width, display.height);
+        const dData = imgData.data;
+
+        const hex = color.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+
+        for (let i = 0; i < dData.length; i += 4) {
+          const brightness = (dData[i] + dData[i + 1] + dData[i + 2]) / 3;
+          if (brightness > 50) {
+            dData[i] = r;
+            dData[i + 1] = g;
+            dData[i + 2] = b;
+            dData[i + 3] = 255;
+          } else {
+            dData[i + 3] = 0;
+          }
+        }
+        dctx.putImageData(imgData, 0, 0);
+        setCanvas(display);
+      }
+    };
+    img.src = maskUrl;
+    return () => setCanvas(null);
+  }, [maskUrl, color]);
+
+  return canvas;
+}
+
 export function CaseCanvas({
   imageUrl,
   heatmapUrl,
+  maskUrl,
   contours,
   showHeatmap = false,
+  showMask = true,
   heatmapOpacity = 0.42,
   enableZoom = false,
 }: {
   imageUrl?: string;
   heatmapUrl?: string;
+  maskUrl?: string;
   contours?: number[][][];
   showHeatmap?: boolean;
+  showMask?: boolean;
   heatmapOpacity?: number;
   enableZoom?: boolean;
 }) {
   const image = useHtmlImage(imageUrl);
   const heatmap = useHtmlImage(heatmapUrl);
+  const maskImage = useColorizedMask(maskUrl);
   const stageRef = useRef<Konva.Stage | null>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -96,7 +148,8 @@ export function CaseCanvas({
           <Layer>
             {image && <KonvaImage image={image} width={512} height={512} />}
             {showHeatmap && heatmap && <KonvaImage image={heatmap} width={512} height={512} opacity={heatmapOpacity} />}
-            {(contours || []).map((polygon, i) => (
+            {showMask && maskImage && <KonvaImage image={maskImage} width={512} height={512} opacity={0.42} />}
+            {showMask && (contours || []).map((polygon, i) => (
               <Line key={i} points={polygon.flat()} closed stroke="#10B981" strokeWidth={2.5} fill="rgba(16,185,129,0.12)" lineJoin="round" />
             ))}
           </Layer>

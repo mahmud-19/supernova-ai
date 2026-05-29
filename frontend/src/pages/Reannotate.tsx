@@ -36,11 +36,77 @@ function useHtmlImage(url?: string) {
   return image;
 }
 
+function useMaskCanvases(maskUrl?: string, color: string = '#20a75a') {
+  const [canvases, setCanvases] = useState<{ display: HTMLCanvasElement; source: HTMLCanvasElement } | null>(null);
+
+  useEffect(() => {
+    if (!maskUrl) {
+      setCanvases(null);
+      return;
+    }
+    const img = new window.Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      const display = document.createElement('canvas');
+      display.width = img.width || 512;
+      display.height = img.height || 512;
+      const dctx = display.getContext('2d');
+
+      const source = document.createElement('canvas');
+      source.width = img.width || 512;
+      source.height = img.height || 512;
+      const sctx = source.getContext('2d');
+
+      if (dctx && sctx) {
+        dctx.drawImage(img, 0, 0);
+        const imgData = dctx.getImageData(0, 0, display.width, display.height);
+        const dData = imgData.data;
+
+        sctx.drawImage(img, 0, 0);
+        const sImgData = sctx.getImageData(0, 0, source.width, source.height);
+        const sData = sImgData.data;
+
+        const hex = color.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+
+        for (let i = 0; i < dData.length; i += 4) {
+          const brightness = (dData[i] + dData[i + 1] + dData[i + 2]) / 3;
+          if (brightness > 50) {
+            dData[i] = r;
+            dData[i + 1] = g;
+            dData[i + 2] = b;
+            dData[i + 3] = 255;
+
+            sData[i] = 255;
+            sData[i + 1] = 255;
+            sData[i + 2] = 255;
+            sData[i + 3] = 255;
+          } else {
+            dData[i + 3] = 0;
+            sData[i + 3] = 0;
+          }
+        }
+        dctx.putImageData(imgData, 0, 0);
+        sctx.putImageData(sImgData, 0, 0);
+        setCanvases({ display, source });
+      }
+    };
+    img.src = maskUrl;
+    return () => setCanvases(null);
+  }, [maskUrl, color]);
+
+  return canvases;
+}
+
 export function Reannotate() {
   const { id } = useParams();
   const [caseData, setCaseData] = useState<CaseDetail | null>(null);
   const [tool, setTool] = useState<Tool>('brush');
   const [showHeatmap, setShowHeatmap] = useState(true);
+  const [showMask, setShowMask] = useState(true);
+  const [maskOpacity, setMaskOpacity] = useState(0.42);
   const [brushSize, setBrushSize] = useState(12);
   const [lines, setLines] = useState<StrokeLine[]>([]);
   const [polygon, setPolygon] = useState<number[][]>([]);         // in-progress polygon
@@ -54,8 +120,13 @@ export function Reannotate() {
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const navigate = useNavigate();
+  
   const imageUrl = useObjectUrl(id ? `/cases/${id}/image` : undefined);
   const heatmapUrl = useObjectUrl(id ? `/cases/${id}/heatmap` : undefined);
+  const maskPath = caseData?.current_result?.source === 'expert' ? `/cases/${id}/mask` : undefined;
+  const maskUrl = useObjectUrl(maskPath);
+  const maskCanvases = useMaskCanvases(maskUrl);
+
   const image = useHtmlImage(imageUrl);
   const heatmap = useHtmlImage(heatmapUrl);
   const [reviewerNote, setReviewerNote] = useState('');
@@ -83,6 +154,17 @@ export function Reannotate() {
   useEffect(() => {
     api.get<CaseDetail>(`/cases/${id}`).then((response) => setCaseData(response.data)).catch((err) => setError(err.response?.data?.detail || 'Unable to load annotation view.'));
   }, [id]);
+
+  useEffect(() => {
+    if (caseData?.current_result) {
+      if (caseData.current_result.source === 'expert') {
+        setSavedPolygons(caseData.current_result.contour_json || []);
+        if (caseData.reviewer_note) {
+          setReviewerNote(caseData.reviewer_note);
+        }
+      }
+    }
+  }, [caseData]);
 
   function pushState(newLines: StrokeLine[], newPolygons: number[][][]) {
     const nextHistory = history.slice(0, historyIndex + 1);
@@ -134,7 +216,11 @@ export function Reannotate() {
   }, [historyIndex, history]);
 
   // Merge AI contours and user-saved polygons; AI contours come first
-  const aiContours = useMemo(() => caseData?.current_result?.contour_json || [], [caseData]);
+  const aiContours = useMemo(() => {
+    if (!caseData?.current_result) return [];
+    if (caseData.current_result.source === 'expert') return [];
+    return caseData.current_result.contour_json || [];
+  }, [caseData]);
   // All polygons: [ai_contours..., savedPolygons...]
   const allPolygons = useMemo(() => [...aiContours, ...savedPolygons], [aiContours, savedPolygons]);
   const readOnly = Boolean(caseData?.is_finalized);
@@ -251,6 +337,12 @@ export function Reannotate() {
     lctx.strokeStyle = 'white';
     lctx.lineCap = 'round';
     lctx.lineJoin = 'round';
+
+    // Draw the source canvas of the loaded mask at the start
+    if (maskCanvases?.source) {
+      lctx.drawImage(maskCanvases.source, 0, 0);
+    }
+
     allPolygons.forEach((shape) => {
       if (shape.length < 3) return;
       lctx.globalCompositeOperation = 'source-over';
@@ -341,13 +433,7 @@ export function Reannotate() {
               <span className="tool-btn-shortcut">{t.key}</span>
             </button>
           ))}
-          <button
-            className={`tool-btn ${showHeatmap ? 'active' : ''}`}
-            onClick={() => setShowHeatmap(v => !v)}
-            title="Toggle Confidence Map (C)"
-          >
-            <EyeIcon /> Heatmap <span className="tool-btn-shortcut">C</span>
-          </button>
+
 
           <div className="brush-slider-row" style={{ marginTop: 8 }}>
             <div className="brush-slider-label">
@@ -378,6 +464,90 @@ export function Reannotate() {
                 {panMode ? '✋ Pan: On' : '✋ Pan'}
               </button>
             </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4 }}>
+            <p className="tool-panel-title" style={{ marginBottom: 6 }}>Overlays</p>
+            <button
+              type="button"
+              className={`tool-btn ${showHeatmap ? 'active' : ''}`}
+              onClick={() => setShowHeatmap(v => !v)}
+              style={{ marginBottom: 6, background: showHeatmap ? 'var(--primary)' : undefined, color: showHeatmap ? '#fff' : undefined }}
+            >
+              <EyeIcon /> Heatmap {showHeatmap ? 'ON' : 'OFF'}
+            </button>
+            <button
+              type="button"
+              className={`tool-btn ${showMask ? 'active' : ''}`}
+              onClick={() => setShowMask(v => !v)}
+              style={{ background: showMask ? 'var(--primary)' : undefined, color: showMask ? '#fff' : undefined }}
+            >
+              <EyeIcon /> Binary Mask {showMask ? 'ON' : 'OFF'}
+            </button>
+            <div className="brush-slider-row" style={{ marginTop: 6 }}>
+              <div className="brush-slider-label">
+                <span>Mask Opacity</span>
+                <span>{Math.round(maskOpacity * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                className="brush-slider"
+                min={0}
+                max={100}
+                value={Math.round(maskOpacity * 100)}
+                onChange={e => setMaskOpacity(Number(e.target.value) / 100)}
+                disabled={!showMask}
+              />
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4 }}>
+            <p className="tool-panel-title" style={{ marginBottom: 6 }}>Contrast & Exposure</p>
+            <div className="brush-slider-row" style={{ padding: '4px 0' }}>
+              <div className="brush-slider-label">
+                <span>Brightness</span>
+                <span>{brightness}%</span>
+              </div>
+              <input
+                type="range"
+                min={50}
+                max={200}
+                value={brightness}
+                onChange={e => setBrightness(Number(e.target.value))}
+                className="brush-slider"
+              />
+            </div>
+            <div className="brush-slider-row" style={{ padding: '4px 0' }}>
+              <div className="brush-slider-label">
+                <span>Contrast</span>
+                <span>{contrast}%</span>
+              </div>
+              <input
+                type="range"
+                min={50}
+                max={200}
+                value={contrast}
+                onChange={e => setContrast(Number(e.target.value))}
+                className="brush-slider"
+              />
+            </div>
+            <label className="control-checkbox-label" style={{ marginTop: 6, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <input
+                type="checkbox"
+                checked={invert}
+                onChange={e => setInvert(e.target.checked)}
+                style={{ accentColor: 'var(--primary)', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: '0.78125rem', fontWeight: 600, color: 'var(--text)' }}>Invert Scan Colors</span>
+            </label>
+            <button
+              className="btn btn-ghost btn-sm"
+              type="button"
+              onClick={() => { setBrightness(100); setContrast(100); setInvert(false); }}
+              style={{ marginTop: 8, width: '100%', padding: '4px 8px', fontSize: '0.75rem' }}
+            >
+              Reset Filters
+            </button>
           </div>
 
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4 }}>
@@ -433,56 +603,63 @@ export function Reannotate() {
               </Layer>
 
               {/* Polygon + brush strokes layer */}
-              <Layer>
-                {/* Saved polygons — filled contours */}
-                {allPolygons.map((shape, polyIdx) => (
-                  <Line
-                    key={`c-${polyIdx}`}
-                    points={shape.flat()}
-                    closed
-                    stroke={polyIdx === selectedPolyIdx ? '#FFD700' : MASK_COLOR}
-                    strokeWidth={polyIdx === selectedPolyIdx ? 4 : 3}
-                    fill={polyIdx === selectedPolyIdx ? 'rgba(255,215,0,0.18)' : 'rgba(32,167,90,0.28)'}
-                    globalCompositeOperation="source-over"
-                    onClick={() => {
-                      if (!readOnly && isEditable(polyIdx)) {
-                        setSelectedPolyIdx(prev => prev === polyIdx ? -1 : polyIdx);
-                      }
-                    }}
-                    onTap={() => {
-                      if (!readOnly && isEditable(polyIdx)) {
-                        setSelectedPolyIdx(prev => prev === polyIdx ? -1 : polyIdx);
-                      }
-                    }}
-                    hitStrokeWidth={10}
-                  />
-                ))}
+              {showMask && (
+                <Layer>
+                  {/* Loaded raster brush mask */}
+                  {maskCanvases && <KonvaImage image={maskCanvases.display} width={512} height={512} opacity={maskOpacity} />}
 
-                {/* In-progress polygon (being drawn) */}
-                {polygon.length > 0 && (
-                  <Line points={polygon.flat()} stroke="#efc242" strokeWidth={3} closed={false} />
-                )}
+                  {/* Saved polygons — filled contours */}
+                  {allPolygons.map((shape, polyIdx) => (
+                    <Line
+                      key={`c-${polyIdx}`}
+                      points={shape.flat()}
+                      closed
+                      stroke={polyIdx === selectedPolyIdx ? '#FFD700' : MASK_COLOR}
+                      strokeWidth={polyIdx === selectedPolyIdx ? 4 : 3}
+                      fill={polyIdx === selectedPolyIdx ? 'rgba(255,215,0,0.18)' : 'rgba(32,167,90,0.28)'}
+                      globalCompositeOperation="source-over"
+                      opacity={maskOpacity}
+                      onClick={() => {
+                        if (!readOnly && isEditable(polyIdx)) {
+                          setSelectedPolyIdx(prev => prev === polyIdx ? -1 : polyIdx);
+                        }
+                      }}
+                      onTap={() => {
+                        if (!readOnly && isEditable(polyIdx)) {
+                          setSelectedPolyIdx(prev => prev === polyIdx ? -1 : polyIdx);
+                        }
+                      }}
+                      hitStrokeWidth={10}
+                    />
+                  ))}
 
-                {/* In-progress polygon vertex dots */}
-                {tool === 'polygon' && polygon.map(([px, py], vi) => (
-                  <Circle
-                    key={`pv-${vi}`}
-                    x={px} y={py}
-                    radius={vi === 0 ? HANDLE_RADIUS + 2 : HANDLE_RADIUS - 2}
-                    fill={vi === 0 && polygon.length > 2 ? '#efc242' : '#fff'}
-                    stroke="#efc242"
-                    strokeWidth={2}
-                  />
-                ))}
+                  {/* In-progress polygon (being drawn) */}
+                  {polygon.length > 0 && (
+                    <Line points={polygon.flat()} stroke="#efc242" strokeWidth={3} closed={false} opacity={maskOpacity} />
+                  )}
 
-                {/* Brush/eraser strokes */}
-                {lines.map((line, i) => (
-                  <Line key={i} points={line.points} stroke={MASK_COLOR} strokeWidth={line.size} tension={0.4} lineCap="round" lineJoin="round" opacity={line.tool === 'eraser' ? 1 : 0.85} globalCompositeOperation={line.tool === 'eraser' ? 'destination-out' : 'source-over'} />
-                ))}
-              </Layer>
+                  {/* In-progress polygon vertex dots */}
+                  {tool === 'polygon' && polygon.map(([px, py], vi) => (
+                    <Circle
+                      key={`pv-${vi}`}
+                      x={px} y={py}
+                      radius={vi === 0 ? HANDLE_RADIUS + 2 : HANDLE_RADIUS - 2}
+                      fill={vi === 0 && polygon.length > 2 ? '#efc242' : '#fff'}
+                      stroke="#efc242"
+                      strokeWidth={2}
+                      opacity={maskOpacity}
+                    />
+                  ))}
+
+                  {/* Brush/eraser strokes */}
+                  {lines.map((line, i) => (
+                    <Line key={i} points={line.points} stroke={MASK_COLOR} strokeWidth={line.size} tension={0.4} lineCap="round" lineJoin="round" opacity={line.tool === 'eraser' ? 1 : maskOpacity} globalCompositeOperation={line.tool === 'eraser' ? 'destination-out' : 'source-over'} />
+                  ))}
+                </Layer>
+              )}
 
               {/* Draggable vertex handles for selected polygon */}
-              {selectedPolyIdx >= 0 && !readOnly && isEditable(selectedPolyIdx) && (
+              {showMask && selectedPolyIdx >= 0 && !readOnly && isEditable(selectedPolyIdx) && (
                 <Layer>
                   {allPolygons[selectedPolyIdx]?.map(([vx, vy], vertIdx) => (
                     <Circle
@@ -513,56 +690,8 @@ export function Reannotate() {
               </Layer>
             </Stage>
           </div>
-          <ConfidenceLegend compact />
-
-          {/* Dynamic Image Adjustments panel */}
-          <div className="canvas-controls-panel">
-            <div className="canvas-controls-title">
-              <span>🎛️ Contrast & Exposure Controls</span>
-              <button
-                className="btn btn-ghost btn-sm"
-                type="button"
-                onClick={() => { setBrightness(100); setContrast(100); setInvert(false); }}
-                style={{ padding: '2px 8px', fontSize: '0.75rem', height: 'auto', minHeight: 'auto' }}
-              >
-                Reset Filters
-              </button>
-            </div>
-            <div className="canvas-controls-grid">
-              <div className="control-slider-group">
-                <label>Brightness <span>{brightness}%</span></label>
-                <input
-                  type="range"
-                  min={50}
-                  max={200}
-                  value={brightness}
-                  onChange={e => setBrightness(Number(e.target.value))}
-                  className="control-slider"
-                />
-              </div>
-              <div className="control-slider-group">
-                <label>Contrast <span>{contrast}%</span></label>
-                <input
-                  type="range"
-                  min={50}
-                  max={200}
-                  value={contrast}
-                  onChange={e => setContrast(Number(e.target.value))}
-                  className="control-slider"
-                />
-              </div>
-            </div>
-            <div className="control-toggles">
-              <label className="control-checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={invert}
-                  onChange={e => setInvert(e.target.checked)}
-                  style={{ accentColor: 'var(--primary)', cursor: 'pointer' }}
-                />
-                Invert Scan Colors
-              </label>
-            </div>
+          <div style={{ marginTop: 12 }}>
+            <ConfidenceLegend compact />
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>

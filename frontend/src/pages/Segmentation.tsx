@@ -19,7 +19,8 @@ export function Segmentation() {
   const [caseData, setCaseData] = useState<CaseDetail | null>(null);
   const [error, setError] = useState('');
   const [heatmapOpacity, setHeatmapOpacity] = useState(0.42);
-  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(true);
+  const [showMask, setShowMask] = useState(true);
   const [submitModal, setSubmitModal] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -28,6 +29,7 @@ export function Segmentation() {
   const navigate = useNavigate();
   const imageUrl = useObjectUrl(id ? `/cases/${id}/image` : undefined);
   const heatmapUrl = useObjectUrl(id ? `/cases/${id}/heatmap` : undefined);
+  const maskUrl = useObjectUrl(id ? `/cases/${id}/mask` : undefined);
 
   useEffect(() => {
     api.get<CaseDetail>(`/cases/${id}`)
@@ -77,77 +79,83 @@ export function Segmentation() {
       {error && <div className="inline-error" style={{ marginBottom: 16 }}>{error}</div>}
 
       {caseData && (
-        <div className="triage-grid three-col" style={{ gap: 18 }}>
-          {/* Left panel */}
-          <div className="card" style={{ padding: 16 }}>
-            <h3 style={{ marginBottom: 12 }}>AI Output</h3>
-            <p className="text-sm" style={{ marginBottom: 8 }}>Rapid segmentation with pixel-level uncertainty map.</p>
-            {conf !== null && (
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: caseData.current_result?.source === 'expert' ? 0 : 4 }}>
-                  <span className="text-sm text-muted">Confidence</span>
-                  {caseData.current_result?.source === 'expert' ? (
-                    <span className="text-sm fw-600" style={{ color: 'var(--approved)' }}>Expert Verified</span>
-                  ) : (
-                    <span className="text-sm fw-600">{conf}%</span>
+        <div className="segmentation-grid" style={{ gap: 18 }}>
+          {/* Left panel: AI Output + Controls + Details */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            
+            {/* AI Output Card */}
+            <div className="card" style={{ padding: 16 }}>
+              <h3 style={{ marginBottom: 12 }}>AI Output</h3>
+              <p className="text-sm" style={{ marginBottom: 8 }}>Rapid segmentation with pixel-level uncertainty map.</p>
+              {conf !== null && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: caseData.current_result?.source === 'expert' ? 0 : 4 }}>
+                    <span className="text-sm text-muted">Confidence</span>
+                    {caseData.current_result?.source === 'expert' ? (
+                      <span className="text-sm fw-600" style={{ color: 'var(--approved)' }}>Expert Verified</span>
+                    ) : (
+                      <span className="text-sm fw-600">{conf}%</span>
+                    )}
+                  </div>
+                  {caseData.current_result?.source !== 'expert' && (
+                    <div className="confidence-bar-wrap">
+                      <div className="confidence-bar" style={{ width: `${conf}%`, background: conf >= 75 ? 'var(--approved)' : conf >= 50 ? 'var(--primary)' : 'var(--pending)' }} />
+                    </div>
                   )}
                 </div>
-                {caseData.current_result?.source !== 'expert' && (
-                  <div className="confidence-bar-wrap">
-                    <div className="confidence-bar" style={{ width: `${conf}%`, background: conf >= 75 ? 'var(--approved)' : conf >= 50 ? 'var(--primary)' : 'var(--pending)' }} />
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {[
+                  ['Lesions', caseData.current_result?.total_lesions ?? '—'],
+                  ['Total pixels', caseData.current_result?.total_pixels ?? '—'],
+                  ['Format', `${caseData.file_format} · ${caseData.width}×${caseData.height}`],
+                  ['Bit depth', `${caseData.bit_depth}-bit`],
+                ].map(([k, v]) => (
+                  <div key={String(k)} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>{k}</span>
+                    <span style={{ fontWeight: 600 }}>{String(v)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Heatmap & Binary Mask View Controls Card */}
+            <div className="card" style={{ padding: 16 }}>
+              <h3 style={{ marginBottom: 12 }}>View Controls</h3>
+              <div style={{ background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '12px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${showHeatmap ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => setShowHeatmap(p => !p)}
+                    style={{ background: showHeatmap ? 'var(--primary)' : undefined, color: showHeatmap ? '#fff' : undefined }}
+                  >
+                    Heatmap: {showHeatmap ? 'ON' : 'OFF'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${showMask ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => setShowMask(p => !p)}
+                    style={{ background: showMask ? 'var(--primary)' : undefined, color: showMask ? '#fff' : undefined }}
+                  >
+                    Binary Mask: {showMask ? 'ON' : 'OFF'}
+                  </button>
+                  <span className="text-xs text-muted">Independent view toggles</span>
+                </div>
+                
+                {showHeatmap && (
+                  <div className="heatmap-slider-row" style={{ marginBottom: 10 }}>
+                    <label>Opacity: <strong>{Math.round(heatmapOpacity * 100)}%</strong></label>
+                    <input type="range" min={0} max={100} value={Math.round(heatmapOpacity * 100)}
+                      onChange={e => setHeatmapOpacity(Number(e.target.value) / 100)} style={{ flex: 1 }} />
                   </div>
                 )}
+                
+                <ConfidenceLegend />
               </div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {[
-                ['Lesions', caseData.current_result?.total_lesions ?? '—'],
-                ['Total pixels', caseData.current_result?.total_pixels ?? '—'],
-                ['Format', `${caseData.file_format} · ${caseData.width}×${caseData.height}`],
-                ['Bit depth', `${caseData.bit_depth}-bit`],
-              ].map(([k, v]) => (
-                <div key={String(k)} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>{k}</span>
-                  <span style={{ fontWeight: 600 }}>{String(v)}</span>
-                </div>
-              ))}
             </div>
-          </div>
 
-          {/* Centre — canvas */}
-          <div>
-            <CaseCanvas
-              imageUrl={imageUrl}
-              heatmapUrl={heatmapUrl}
-              contours={caseData.current_result?.contour_json}
-              showHeatmap={showHeatmap}
-              heatmapOpacity={heatmapOpacity}
-              enableZoom
-            />
-            <div style={{ marginTop: 10, background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '10px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${showHeatmap ? 'btn-primary' : 'btn-ghost'}`}
-                  onClick={() => setShowHeatmap(p => !p)}
-                >
-                  {showHeatmap ? 'Hide Heatmap' : 'Show Heatmap'}
-                </button>
-                <span className="text-xs text-muted">Confidence/uncertainty overlay</span>
-              </div>
-              {showHeatmap && (
-                <div className="heatmap-slider-row">
-                  <label>Opacity: <strong>{Math.round(heatmapOpacity * 100)}%</strong></label>
-                  <input type="range" min={0} max={100} value={Math.round(heatmapOpacity * 100)}
-                    onChange={e => setHeatmapOpacity(Number(e.target.value) / 100)} style={{ flex: 1 }} />
-                </div>
-              )}
-              <ConfidenceLegend />
-            </div>
-          </div>
-
-          {/* Right panel */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Status Card */}
             <div className="card" style={{ padding: 16 }}>
               <h3 style={{ marginBottom: 8 }}>Status</h3>
               <span className={`status-badge ${statusClass(caseData.status)}`}>{statusLabel(caseData.status)}</span>
@@ -159,10 +167,7 @@ export function Segmentation() {
               )}
             </div>
 
-            <div className="card" style={{ padding: 16 }}>
-              <Timeline caseId={caseData.id} />
-            </div>
-
+            {/* Action Stack */}
             <div className="action-stack">
               <button
                 className="action-card action-button"
@@ -188,6 +193,28 @@ export function Segmentation() {
                 <strong>Upload Another</strong>
                 <span>Return to the upload form.</span>
               </button>
+            </div>
+
+            {/* Timeline */}
+            <div className="card" style={{ padding: 16 }}>
+              <Timeline caseId={caseData.id} />
+            </div>
+          </div>
+
+          {/* Right panel: Ultrasound Scan Image Canvas */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="card" style={{ padding: 16 }}>
+              <h3 style={{ marginBottom: 12 }}>Ultrasound Scan</h3>
+              <CaseCanvas
+                imageUrl={imageUrl}
+                heatmapUrl={heatmapUrl}
+                maskUrl={maskUrl}
+                contours={caseData.current_result?.contour_json}
+                showHeatmap={showHeatmap}
+                showMask={showMask}
+                heatmapOpacity={heatmapOpacity}
+                enableZoom
+              />
             </div>
           </div>
         </div>

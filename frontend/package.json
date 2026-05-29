@@ -8,6 +8,7 @@
     "preview": "vite preview --host 127.0.0.1 --port 5173"
   },
   "dependencies": {
+    "@rolldown/binding-linux-x64-gnu": "^1.0.3",
     "@vitejs/plugin-react": "latest",
     "axios": "latest",
     "konva": "^9.3.18",

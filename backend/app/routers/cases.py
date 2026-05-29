@@ -100,6 +100,10 @@ async def upload_case(
     db: Session = Depends(get_db),
 ) -> Case:
     content, original_format = await read_validated_upload(file)
+    if patient_id:
+        existing = db.scalar(select(Case).where(Case.patient_id == patient_id))
+        if existing:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This Patient ID already exists")
     case = Case(
         display_code=_display_code(db),
         owner_id=current_user.id,

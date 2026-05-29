@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { CaseDetail } from '../api/types';
+import { CaseCanvas } from '../components/CaseCanvas';
 import { ConfidenceLegend } from '../components/Legend';
 import { AppLayout, Breadcrumb } from '../components/Layout';
 import { Modal } from '../components/Modal';
@@ -14,6 +15,9 @@ export function Outcome() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [approveModal, setApproveModal] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(true);
+  const [showMask, setShowMask] = useState(true);
+  const [heatmapOpacity, setHeatmapOpacity] = useState(0.42);
   const navigate = useNavigate();
   const { toast } = useToast();
   const imageUrl = useObjectUrl(id ? `/cases/${id}/image` : undefined);
@@ -97,20 +101,50 @@ export function Outcome() {
             )}
           </div>
 
-          {/* Image pair */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-            <div className="card" style={{ padding: 16 }}>
-              <h3 style={{ marginBottom: 10 }}>Uncertainty Heatmap</h3>
-              <div style={{ position: 'relative', width: '100%', borderRadius: 8, overflow: 'hidden', background: '#0b1220' }}>
-                {imageUrl && <img src={imageUrl} alt="Ultrasound scan" style={{ display: 'block', width: '100%' }} />}
-                {heatmapUrl && <img src={heatmapUrl} alt="Uncertainty Heatmap" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />}
+          {/* Interactive Case View */}
+          <div className="card" style={{ padding: 16, marginBottom: 20 }}>
+            <h3 style={{ marginBottom: 12 }}>Interactive Case View</h3>
+            <CaseCanvas
+              imageUrl={imageUrl}
+              heatmapUrl={heatmapUrl}
+              maskUrl={maskUrl}
+              contours={caseData.current_result?.contour_json}
+              showHeatmap={showHeatmap}
+              showMask={showMask}
+              heatmapOpacity={heatmapOpacity}
+              enableZoom
+            />
+            
+            <div style={{ marginTop: 14, background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '12px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${showHeatmap ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setShowHeatmap(p => !p)}
+                  style={{ background: showHeatmap ? 'var(--primary)' : undefined, color: showHeatmap ? '#fff' : undefined }}
+                >
+                  Heatmap: {showHeatmap ? 'ON' : 'OFF'}
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${showMask ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setShowMask(p => !p)}
+                  style={{ background: showMask ? 'var(--primary)' : undefined, color: showMask ? '#fff' : undefined }}
+                >
+                  Binary Mask: {showMask ? 'ON' : 'OFF'}
+                </button>
+                <span className="text-xs text-muted">Independent view toggles</span>
               </div>
-              <p className="text-xs text-faint" style={{ marginTop: 6 }}>Transparent where confident · Blue/Green → Red over uncertain regions</p>
-            </div>
-            <div className="card" style={{ padding: 16 }}>
-              <h3 style={{ marginBottom: 10 }}>Segmented Mask</h3>
-              {maskUrl && <img src={maskUrl} alt="Segmented Mask" style={{ borderRadius: 8, width: '100%' }} />}
-              <p className="text-xs text-faint" style={{ marginTop: 6 }}>Final expert-corrected lesion mask</p>
+              
+              {showHeatmap && (
+                <div className="heatmap-slider-row" style={{ marginBottom: 10 }}>
+                  <label>Opacity: <strong>{Math.round(heatmapOpacity * 100)}%</strong></label>
+                  <input type="range" min={0} max={100} value={Math.round(heatmapOpacity * 100)}
+                    onChange={e => setHeatmapOpacity(Number(e.target.value) / 100)} style={{ flex: 1 }} />
+                </div>
+              )}
+              
+              <ConfidenceLegend />
             </div>
           </div>
 

@@ -1651,6 +1651,35 @@ body, .card, .top-bar, .sidebar, .sidebar-link, input, select, textarea, button,
   cursor: grabbing;
 }
 
+/* ── Website-wide image container and stage scaling rules ── */
+.canvas-frame {
+  max-width: 420px !important;
+  width: 100% !important;
+  aspect-ratio: 1 / 1 !important;
+  margin: 0 auto !important;
+}
+
+.canvas-frame .konva-stage,
+.canvas-frame .konva-stage .konvajs-content,
+.canvas-frame .konva-stage canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ── Segmentation View Side-by-Side Grid ── */
+.segmentation-grid {
+  display: grid;
+  grid-template-columns: 1fr 452px;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .segmentation-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Respect reduced-motion preferences ── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

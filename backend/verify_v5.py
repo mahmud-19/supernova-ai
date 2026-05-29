@@ -12,7 +12,7 @@ for _ in range(10):
         time.sleep(1)
 
 # ---- Sonologist login ----
-r = requests.post(f"{BASE}/auth/login", json={"identifier": "sonologist@demo.com", "password": "Passw0rd!", "role": "sonologist"})
+r = requests.post(f"{BASE}/auth/login", json={"identifier": "sonologist@supernova.com", "password": "12345678", "role": "sonologist"})
 r.raise_for_status()
 s_token = r.json()["access_token"]
 s_headers = {"Authorization": f"Bearer {s_token}"}
@@ -53,7 +53,7 @@ assert my_case["status"] == "in_review"
 print("PASS: Sonologist /cases/mine shows status=in_review")
 
 # ---- Reviewer sees it ----
-r = requests.post(f"{BASE}/auth/login", json={"identifier": "reviewer@demo.com", "password": "Passw0rd!", "role": "expert_reviewer"})
+r = requests.post(f"{BASE}/auth/login", json={"identifier": "reviewer@supernova.com", "password": "12345678", "role": "expert_reviewer"})
 r.raise_for_status()
 rev_token = r.json()["access_token"]
 rev_headers = {"Authorization": f"Bearer {rev_token}"}

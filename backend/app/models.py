@@ -58,7 +58,7 @@ class Case(Base):
     contrast_adjusted: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_finalized: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Patient / exam metadata
-    patient_id: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    patient_id: Mapped[Optional[str]] = mapped_column(String(80), unique=True, nullable=True)
     patient_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     gender: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
