@@ -103,17 +103,56 @@ export function Outcome() {
 
           {/* Interactive Case View */}
           <div className="card" style={{ padding: 16, marginBottom: 20 }}>
-            <h3 style={{ marginBottom: 12 }}>Interactive Case View</h3>
-            <CaseCanvas
-              imageUrl={imageUrl}
-              heatmapUrl={heatmapUrl}
-              maskUrl={maskUrl}
-              contours={caseData.current_result?.contour_json}
-              showHeatmap={showHeatmap}
-              showMask={showMask}
-              heatmapOpacity={heatmapOpacity}
-              enableZoom
-            />
+            <h3 style={{ marginBottom: 16 }}>Interactive Case View</h3>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24, marginBottom: 16 }}>
+              {/* Left Side: Segmented Mask Image (Black and White Binary Mask of Expert Annotated Image) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <h4 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>
+                  ⚫ Segmented Mask (Binary)
+                </h4>
+                <div className="canvas-frame" style={{ 
+                  aspectRatio: '1 / 1', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  background: '#000000', 
+                  borderRadius: 'var(--r-md)', 
+                  border: '1px solid var(--border)',
+                  overflow: 'hidden',
+                  maxWidth: '420px',
+                  width: '100%',
+                  margin: '0 auto'
+                }}>
+                  {maskUrl ? (
+                    <img
+                      src={maskUrl}
+                      alt="Expert Segmented Mask"
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                  ) : (
+                    <span style={{ color: 'var(--text-faint)', fontSize: '0.8125rem' }}>Loading mask…</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Side: Reannotated Image (Latest Expert / Current Review) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <h4 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>
+                  🩺 Expert Reannotated Image
+                </h4>
+                <CaseCanvas
+                  imageUrl={imageUrl}
+                  heatmapUrl={heatmapUrl}
+                  maskUrl={maskUrl}
+                  contours={caseData.current_result?.contour_json}
+                  showHeatmap={showHeatmap}
+                  showMask={showMask}
+                  heatmapOpacity={heatmapOpacity}
+                  enableZoom
+                />
+              </div>
+            </div>
             
             <div style={{ marginTop: 14, background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '12px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>

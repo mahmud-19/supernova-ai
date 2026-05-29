@@ -48,6 +48,16 @@ def _case_detail(db: Session, case: Case) -> CaseDetail:
     detail.owner_name = case.owner.full_name if case.owner else None
     result = _current_result(db, case.id)
     detail.current_result = InferenceResultRead.model_validate(result) if result else None
+
+    # Fetch original AI result
+    ai_res = db.scalar(
+        select(InferenceResult)
+        .where(InferenceResult.case_id == case.id, InferenceResult.source == ResultSource.ai)
+        .order_by(InferenceResult.version.asc())
+        .limit(1)
+    )
+    detail.ai_result = InferenceResultRead.model_validate(ai_res) if ai_res else None
+
     return detail
 
 
@@ -524,18 +534,44 @@ def get_image(case_id: int, current_user: User = Depends(get_current_user), db: 
 
 
 @router.get("/{case_id}/mask")
-def get_mask(case_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> FileResponse:
+def get_mask(
+    case_id: int,
+    source: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FileResponse:
     _get_visible_case(db, current_user, case_id)
-    result = _current_result(db, case_id)
+    if source is not None:
+        result = db.scalar(
+            select(InferenceResult)
+            .where(InferenceResult.case_id == case_id, InferenceResult.source == source)
+            .order_by(InferenceResult.version.asc())
+            .limit(1)
+        )
+    else:
+        result = _current_result(db, case_id)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No mask exists for this case yet")
     return _serve_path(result.mask_path)
 
 
 @router.get("/{case_id}/heatmap")
-def get_heatmap(case_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> FileResponse:
+def get_heatmap(
+    case_id: int,
+    source: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FileResponse:
     _get_visible_case(db, current_user, case_id)
-    result = _current_result(db, case_id)
+    if source is not None:
+        result = db.scalar(
+            select(InferenceResult)
+            .where(InferenceResult.case_id == case_id, InferenceResult.source == source)
+            .order_by(InferenceResult.version.asc())
+            .limit(1)
+        )
+    else:
+        result = _current_result(db, case_id)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No heatmap exists for this case yet")
     return _serve_path(result.uncertainty_map_path)

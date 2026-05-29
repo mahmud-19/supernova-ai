@@ -185,10 +185,7 @@ export function Segmentation() {
                 <strong>Extract PDF Report</strong>
                 <span>{reporting ? 'Preparing…' : 'Download a PDF report of this case.'}</span>
               </button>
-              <button className="action-card action-button" onClick={() => { logout(); navigate('/login'); }}>
-                <strong>Switch to Reviewer</strong>
-                <span>Log out and return to Login.</span>
-              </button>
+
               <button className="action-card action-button" onClick={() => navigate('/upload')}>
                 <strong>Upload Another</strong>
                 <span>Return to the upload form.</span>

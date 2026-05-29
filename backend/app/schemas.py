@@ -70,6 +70,7 @@ class InferenceResultRead(BaseModel):
 
 class CaseDetail(CaseRead):
     current_result: Optional[InferenceResultRead] = None
+    ai_result: Optional[InferenceResultRead] = None
 
 
 class AnnotateRequest(BaseModel):

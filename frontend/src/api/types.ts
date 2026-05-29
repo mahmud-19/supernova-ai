@@ -35,4 +35,5 @@ export type CaseDetail = {
   created_at: string;
   updated_at: string;
   current_result: InferenceResult | null;
+  ai_result: InferenceResult | null;
 };

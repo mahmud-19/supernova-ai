@@ -17,7 +17,7 @@ DEMO_USERS = [
         "full_name": "Dr. Lee",
         "email": "reviewer@supernova.com",
         "username": "reviewer",
-        "password": "12345678",
+        "password": "87654321",
         "role": UserRole.expert_reviewer,
     },
 ]

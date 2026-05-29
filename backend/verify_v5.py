@@ -53,7 +53,7 @@ assert my_case["status"] == "in_review"
 print("PASS: Sonologist /cases/mine shows status=in_review")
 
 # ---- Reviewer sees it ----
-r = requests.post(f"{BASE}/auth/login", json={"identifier": "reviewer@supernova.com", "password": "12345678", "role": "expert_reviewer"})
+r = requests.post(f"{BASE}/auth/login", json={"identifier": "reviewer@supernova.com", "password": "87654321", "role": "expert_reviewer"})
 r.raise_for_status()
 rev_token = r.json()["access_token"]
 rev_headers = {"Authorization": f"Bearer {rev_token}"}

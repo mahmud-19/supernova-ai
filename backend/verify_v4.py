@@ -56,7 +56,7 @@ assert my_case is not None, "Case not found in /cases/mine"
 print(f"PASS: Case appears in /cases/mine with {len(mine_after)} total case(s)")
 
 # -- Expert Reviewer flow --
-r = requests.post(f"{BASE}/auth/login", json={"identifier": "reviewer@supernova.com", "password": "12345678", "role": "expert_reviewer"})
+r = requests.post(f"{BASE}/auth/login", json={"identifier": "reviewer@supernova.com", "password": "87654321", "role": "expert_reviewer"})
 r.raise_for_status()
 rev_token = r.json()["access_token"]
 rev_headers = {"Authorization": f"Bearer {rev_token}"}

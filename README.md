@@ -39,7 +39,7 @@ The frontend defaults to `http://localhost:8000/api`. For unusual local port con
 ## Demo Logins
 
 - Sonologist: `sonologist@supernova.com` / `12345678`
-- Expert Reviewer: `reviewer@supernova.com` / `12345678`
+- Expert Reviewer: `reviewer@supernova.com` / `87654321`
 
 The role selector must match the account role.
 
