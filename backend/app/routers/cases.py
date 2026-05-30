@@ -137,8 +137,14 @@ async def upload_case(
     db.flush()
 
     result = preprocess_image(content, original_format, get_settings().storage_dir / str(case.id))
+    
+    images_dir = get_settings().storage_dir / "Images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    new_preprocessed_path = images_dir / f"{patient_id}.png"
+    shutil.copyfile(result.preprocessed_path, new_preprocessed_path)
+
     case.original_image_path = result.original_path
-    case.preprocessed_image_path = result.preprocessed_path
+    case.preprocessed_image_path = str(new_preprocessed_path)
     case.width = result.width
     case.height = result.height
     case.file_format = result.file_format
@@ -316,8 +322,36 @@ def finalize_case(
     case = _get_visible_case(db, current_user, case_id)
     if case.is_finalized:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Case is already finalized")
-    if _current_result(db, case.id) is None:
+    result = _current_result(db, case.id)
+    if result is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Run inference before final approval")
+
+    # Save the final approved binary black-and-white segmentation mask to storage/Masks/mask_<patient_id>.png
+    masks_dir = get_settings().storage_dir / "Masks"
+    masks_dir.mkdir(parents=True, exist_ok=True)
+    new_mask_path = masks_dir / f"mask_{case.patient_id}.png"
+
+    old_mask_path = Path(result.mask_path)
+    if old_mask_path.exists():
+        shutil.copyfile(str(old_mask_path), str(new_mask_path))
+    else:
+        case_dir_mask = get_settings().storage_dir / str(case.id) / old_mask_path.name
+        if case_dir_mask.exists():
+            shutil.copyfile(str(case_dir_mask), str(new_mask_path))
+        else:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Segmentation mask file not found")
+
+    result.mask_path = str(new_mask_path)
+
+    ann = db.scalar(
+        select(Annotation)
+        .where(Annotation.case_id == case.id)
+        .order_by(Annotation.created_at.desc())
+        .limit(1)
+    )
+    if ann:
+        ann.mask_path = str(new_mask_path)
+
     case.is_finalized = True
     case.status = CaseStatus.approved
     write_audit_log(db, "finalize", user_id=current_user.id, case_id=case.id, ip_address=request.client.host if request.client else None)

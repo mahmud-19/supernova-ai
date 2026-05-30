@@ -307,8 +307,19 @@ def _colormap_rgba(values: np.ndarray) -> np.ndarray:
 
 def run_mock_inference(preprocessed_image_path: str) -> InferenceOutput:
     """Mock implementation fallback if no models / deep-learning stack are available."""
+    from app.database import SessionLocal
+    from app.models import Case
+    from app.config import get_settings
+    from sqlalchemy import select
+
     image_path = Path(preprocessed_image_path)
-    case_dir = image_path.parent
+    patient_id = image_path.stem
+    with SessionLocal() as db:
+        case = db.scalar(select(Case).where(Case.patient_id == patient_id))
+        case_id = case.id if case else "fallback"
+
+    case_dir = get_settings().storage_dir / str(case_id)
+    case_dir.mkdir(parents=True, exist_ok=True)
     version = _next_version(case_dir)
     mask_path = case_dir / f"mask_v{version}.png"
     heatmap_path = case_dir / f"heatmap_v{version}.png"
@@ -365,8 +376,19 @@ def run_inference(preprocessed_image_path: str) -> InferenceOutput:
         logger.info(f"ML: Running ensemble inference using {len(models)} models: {list(models.keys())}")
 
         # 2. Setup destination files
+        from app.database import SessionLocal
+        from app.models import Case
+        from app.config import get_settings
+        from sqlalchemy import select
+
         image_path = Path(preprocessed_image_path)
-        case_dir = image_path.parent
+        patient_id = image_path.stem
+        with SessionLocal() as db:
+            case = db.scalar(select(Case).where(Case.patient_id == patient_id))
+            case_id = case.id if case else "fallback"
+
+        case_dir = get_settings().storage_dir / str(case_id)
+        case_dir.mkdir(parents=True, exist_ok=True)
         version = _next_version(case_dir)
         mask_path = case_dir / f"mask_v{version}.png"
         heatmap_path = case_dir / f"heatmap_v{version}.png"
