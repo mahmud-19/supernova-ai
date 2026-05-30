@@ -45,7 +45,7 @@ def _current_result(db: Session, case_id: int) -> Optional[InferenceResult]:
 
 def _case_detail(db: Session, case: Case) -> CaseDetail:
     detail = CaseDetail.model_validate(case)
-    detail.owner_name = case.owner.full_name if case.owner else None
+    detail.owner_name = case.uploader_name or (case.owner.full_name if case.owner else None)
     result = _current_result(db, case.id)
     detail.current_result = InferenceResultRead.model_validate(result) if result else None
 
@@ -117,6 +117,7 @@ async def upload_case(
     case = Case(
         display_code=_display_code(db),
         owner_id=current_user.id,
+        uploader_name=current_user.full_name,
         status=CaseStatus.pending,
         original_image_path="pending",
         preprocessed_image_path="pending",
@@ -427,6 +428,7 @@ def report_case(
         ("Age:", f"{case.age} yrs" if case.age is not None else "—"),
         ("Gender:", gender_str),
         ("Exam Date:", exam_date_str),
+        ("Sonologist:", case.uploader_name or (case.owner.full_name if case.owner else "—")),
     ]
     for i, (label, val) in enumerate(p_details):
         y = y_details - 16 - i * 14

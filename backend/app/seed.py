@@ -7,18 +7,11 @@ from app.models import User, UserRole
 
 DEMO_USERS = [
     {
-        "full_name": "Dr. Kim",
-        "email": "sonologist@supernova.com",
-        "username": "sonologist",
-        "password": "12345678",
-        "role": UserRole.sonologist,
-    },
-    {
-        "full_name": "Dr. Lee",
-        "email": "reviewer@supernova.com",
-        "username": "reviewer",
-        "password": "87654321",
-        "role": UserRole.expert_reviewer,
+        "full_name": "Admin",
+        "email": "admin@supernova.com",
+        "username": "admin",
+        "password": "123456789",
+        "role": UserRole.admin,
     },
 ]
 

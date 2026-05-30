@@ -7,7 +7,7 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('supernova_token');
+  const token = sessionStorage.getItem('supernova_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -18,13 +18,13 @@ api.interceptors.response.use(
   (response) => {
     const refreshed = response.headers['x-refreshed-token'];
     if (refreshed) {
-      localStorage.setItem('supernova_token', refreshed);
+      sessionStorage.setItem('supernova_token', refreshed);
     }
     return response;
   },
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('supernova_token');
+      sessionStorage.removeItem('supernova_token');
       if (window.location.pathname !== '/login') {
         window.location.assign('/login');
       }

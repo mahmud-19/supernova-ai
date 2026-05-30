@@ -118,8 +118,9 @@ export function AppLayout({ children, title }: AppLayoutProps) {
   }
 
   async function handleLogout() {
+    const isAdmin = user?.role === 'admin';
     await logout();
-    navigate('/login', { replace: true });
+    navigate(isAdmin ? '/admin' : '/login', { replace: true });
   }
 
   return (
@@ -147,7 +148,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
             <div className="top-bar-user-info">
               <span className="top-bar-name">{user?.full_name}</span>
               <span className="top-bar-role">
-                {user?.role === 'sonologist' ? 'Sonologist' : 'Reviewer'}
+                {user?.role === 'admin' ? 'Administrator' : user?.role === 'sonologist' ? 'Sonologist' : 'Reviewer'}
               </span>
             </div>
           </div>
@@ -161,7 +162,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
       <div className="app-main-layout">
         <nav className="sidebar" aria-label="Main navigation">
           <ul className="sidebar-nav">
-            {user?.role === 'sonologist' ? (
+            {user?.role === 'sonologist' && (
               <>
                 <li>
                   <NavLink to="/dashboard" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
@@ -179,7 +180,8 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                   </NavLink>
                 </li>
               </>
-            ) : (
+            )}
+            {user?.role === 'expert_reviewer' && (
               <>
                 <li>
                   <NavLink to="/review" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
@@ -192,6 +194,13 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                   </NavLink>
                 </li>
               </>
+            )}
+            {user?.role === 'admin' && (
+              <li>
+                <NavLink to="/admin/dashboard" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
+                  <SvgDashboard /> <span>User Management</span>
+                </NavLink>
+              </li>
             )}
           </ul>
         </nav>

@@ -4,7 +4,7 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr
 
 
-Role = Literal["sonologist", "expert_reviewer"]
+Role = Literal["sonologist", "expert_reviewer", "admin"]
 
 
 class LoginRequest(BaseModel):
@@ -77,3 +77,30 @@ class AnnotateRequest(BaseModel):
     contour_json: list[list[list[float]]]
     mask_png_base64: str
     reviewer_note: Optional[str] = None
+
+
+class UserCreate(BaseModel):
+    full_name: str
+    username: str
+    email: EmailStr
+    password: str
+    role: Literal["sonologist", "expert_reviewer"]
+
+
+class UserUpdate(BaseModel):
+    full_name: str
+    username: str
+    email: EmailStr
+    password: Optional[str] = None
+    role: Literal["sonologist", "expert_reviewer"]
+
+
+class AdminUserRead(BaseModel):
+    id: int
+    full_name: str
+    username: str
+    email: EmailStr
+    role: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

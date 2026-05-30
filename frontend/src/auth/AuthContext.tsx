@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
 
-export type Role = 'sonologist' | 'expert_reviewer';
+export type Role = 'sonologist' | 'expert_reviewer' | 'admin';
 
 export type User = {
   id: number;
@@ -25,7 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('supernova_token');
+    const token = sessionStorage.getItem('supernova_token');
     if (!token) {
       setLoading(false);
       return;
@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       async login(identifier, password, role) {
         const response = await api.post<{ access_token: string; user: User }>('/auth/login', { identifier, password, role });
-        localStorage.setItem('supernova_token', response.data.access_token);
+        sessionStorage.setItem('supernova_token', response.data.access_token);
         setUser(response.data.user);
         return response.data.user;
       },
@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           await api.post('/auth/logout');
         } finally {
-          localStorage.removeItem('supernova_token');
+          sessionStorage.removeItem('supernova_token');
           setUser(null);
         }
       },

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine
-from app.routers import auth, cases
+from app.routers import auth, cases, admin
 from app.seed import seed_demo_users
 
 
@@ -117,3 +117,4 @@ def health() -> dict[str, str]:
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(cases.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")

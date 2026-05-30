@@ -12,12 +12,20 @@ import { ReviewList } from './pages/ReviewList';
 import { Segmentation } from './pages/Segmentation';
 import { Upload } from './pages/Upload';
 import { Analytics } from './pages/Analytics';
+import { AdminLogin } from './pages/AdminLogin';
+import { AdminDashboard } from './pages/AdminDashboard';
 
 export default function App() {
   return (
     <ErrorBoundary>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/admin" element={<AdminLogin />} />
+        
+        <Route element={<ProtectedRoute roles={['admin']} />}>
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        </Route>
+
         <Route element={<ProtectedRoute roles={['sonologist', 'expert_reviewer']} />}>
           <Route path="/analytics" element={<Analytics />} />
         </Route>

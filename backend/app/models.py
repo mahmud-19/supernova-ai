@@ -15,6 +15,7 @@ def utc_now() -> datetime:
 class UserRole(str, enum.Enum):
     sonologist = "sonologist"
     expert_reviewer = "expert_reviewer"
+    admin = "admin"
 
 
 class CaseStatus(str, enum.Enum):
@@ -47,7 +48,8 @@ class Case(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     display_code: Mapped[str] = mapped_column(String(16), unique=True, index=True, nullable=False)
-    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    uploader_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     status: Mapped[CaseStatus] = mapped_column(Enum(CaseStatus), default=CaseStatus.pending, nullable=False)
     original_image_path: Mapped[str] = mapped_column(String(500), nullable=False)
     preprocessed_image_path: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -97,7 +99,7 @@ class Annotation(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     case_id: Mapped[int] = mapped_column(ForeignKey("cases.id"), nullable=False, index=True)
-    editor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    editor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     mask_path: Mapped[str] = mapped_column(String(500), nullable=False)
     contour_json: Mapped[list] = mapped_column(JSON, nullable=False)
     confidence_map_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
@@ -112,7 +114,7 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     action: Mapped[str] = mapped_column(String(80), nullable=False)
     case_id: Mapped[Optional[int]] = mapped_column(ForeignKey("cases.id"), nullable=True)
     ip_address: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)

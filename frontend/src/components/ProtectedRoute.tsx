@@ -10,6 +10,9 @@ export function ProtectedRoute({ roles }: { roles?: Role[] }) {
     return <Navigate to="/login" replace />;
   }
   if (roles && !roles.includes(user.role)) {
+    if (user.role === 'admin') {
+      return <Navigate to="/admin/dashboard" replace />;
+    }
     return <Navigate to={user.role === 'sonologist' ? '/upload' : '/review'} replace />;
   }
   return <Outlet />;
