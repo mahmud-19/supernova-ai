@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile, status, BackgroundTasks
 from fastapi.responses import FileResponse, StreamingResponse
 from PIL import Image, ImageDraw
 from reportlab.lib import colors
@@ -137,15 +137,27 @@ async def upload_case(
     db.add(case)
     db.flush()
 
-    result = preprocess_image(content, original_format, get_settings().storage_dir / str(case.id))
+    case_dir = get_settings().storage_dir / patient_id
+    case_dir.mkdir(parents=True, exist_ok=True)
+
+    flat_images_dir = get_settings().storage_dir / "Images"
+    flat_images_dir.mkdir(parents=True, exist_ok=True)
+
+    result = preprocess_image(content, original_format, case_dir)
     
-    images_dir = get_settings().storage_dir / "Images"
-    images_dir.mkdir(parents=True, exist_ok=True)
-    new_preprocessed_path = images_dir / f"{patient_id}.png"
-    shutil.copyfile(result.preprocessed_path, new_preprocessed_path)
+    new_preprocessed_path = case_dir / f"{patient_id}.png"
+    if result.preprocessed_path != str(new_preprocessed_path):
+        shutil.copyfile(result.preprocessed_path, str(new_preprocessed_path))
+        try:
+            Path(result.preprocessed_path).unlink()
+        except Exception:
+            pass
+
+    flat_img_path = flat_images_dir / f"{patient_id}.png"
+    shutil.copyfile(str(new_preprocessed_path), str(flat_img_path))
 
     case.original_image_path = result.original_path
-    case.preprocessed_image_path = str(new_preprocessed_path)
+    case.preprocessed_image_path = str(flat_img_path)
     case.width = result.width
     case.height = result.height
     case.file_format = result.file_format
@@ -267,7 +279,7 @@ def annotate_case(
     except Exception:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid mask PNG data")
 
-    case_dir = get_settings().storage_dir / str(case.id)
+    case_dir = get_settings().storage_dir / case.patient_id
     mask_path = case_dir / f"mask_v{version}.png"
     mask.save(mask_path, format="PNG")
     current = _current_result(db, case.id)
@@ -317,9 +329,15 @@ def annotate_case(
 def finalize_case(
     case_id: int,
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_role(UserRole.expert_reviewer)),
     db: Session = Depends(get_db),
 ) -> Case:
+    import uuid
+    import time
+    from app.models import RetrainingState, RetrainingLog
+    from retrain import run_retraining
+
     case = _get_visible_case(db, current_user, case_id)
     if case.is_finalized:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Case is already finalized")
@@ -327,22 +345,30 @@ def finalize_case(
     if result is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Run inference before final approval")
 
-    # Save the final approved binary black-and-white segmentation mask to storage/Masks/mask_<patient_id>.png
-    masks_dir = get_settings().storage_dir / "Masks"
-    masks_dir.mkdir(parents=True, exist_ok=True)
-    new_mask_path = masks_dir / f"mask_{case.patient_id}.png"
+    # Save approved mask directly to storage/<patient_id>/mask_<patient_id>.png
+    case_dir = get_settings().storage_dir / case.patient_id
+    new_mask_path = case_dir / f"mask_{case.patient_id}.png"
+
+    # Also save to storage/Masks/mask_<patient_id>.png
+    flat_masks_dir = get_settings().storage_dir / "Masks"
+    flat_masks_dir.mkdir(parents=True, exist_ok=True)
+    flat_mask_path = flat_masks_dir / f"mask_{case.patient_id}.png"
 
     old_mask_path = Path(result.mask_path)
     if old_mask_path.exists():
-        shutil.copyfile(str(old_mask_path), str(new_mask_path))
+        if old_mask_path != new_mask_path:
+            shutil.copyfile(str(old_mask_path), str(new_mask_path))
     else:
-        case_dir_mask = get_settings().storage_dir / str(case.id) / old_mask_path.name
+        case_dir_mask = case_dir / old_mask_path.name
         if case_dir_mask.exists():
             shutil.copyfile(str(case_dir_mask), str(new_mask_path))
         else:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Segmentation mask file not found")
 
-    result.mask_path = str(new_mask_path)
+    # Copy to flat Masks path (overwriting if it exists)
+    shutil.copyfile(str(new_mask_path), str(flat_mask_path))
+
+    result.mask_path = str(flat_mask_path)
 
     ann = db.scalar(
         select(Annotation)
@@ -351,12 +377,53 @@ def finalize_case(
         .limit(1)
     )
     if ann:
-        ann.mask_path = str(new_mask_path)
+        ann.mask_path = str(flat_mask_path)
 
     case.is_finalized = True
     case.status = CaseStatus.approved
     write_audit_log(db, "finalize", user_id=current_user.id, case_id=case.id, ip_address=request.client.host if request.client else None)
-    db.commit()
+
+    # --- Human-in-the-loop Retraining Integration ---
+    corrections_dir = Path("corrections")
+    corr_images = corrections_dir / "images"
+    corr_masks = corrections_dir / "masks"
+    corr_images.mkdir(parents=True, exist_ok=True)
+    corr_masks.mkdir(parents=True, exist_ok=True)
+
+    # 1. Copy preprocessed image to corrections/images/<patient_id>.png
+    if case.preprocessed_image_path and Path(case.preprocessed_image_path).exists():
+        shutil.copyfile(case.preprocessed_image_path, str(corr_images / f"{case.patient_id}.png"))
+
+    # 2. Copy approved mask to corrections/masks/<patient_id>.png
+    if flat_mask_path.exists():
+        shutil.copyfile(str(flat_mask_path), str(corr_masks / f"{case.patient_id}.png"))
+
+    # 3. Update retraining state counter
+    state = db.scalar(select(RetrainingState).where(RetrainingState.id == 1))
+    if not state:
+        state = RetrainingState(id=1, approved_since_last_retrain=0)
+        db.add(state)
+
+    state.approved_since_last_retrain += 1
+
+    # 4. Trigger background retraining if counter hits 100
+    if state.approved_since_last_retrain >= 100:
+        state.approved_since_last_retrain = 0
+
+        # Create RetrainingLog
+        log_id = f"retrain_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+        new_log = RetrainingLog(
+            id=log_id,
+            status="running",
+        )
+        db.add(new_log)
+        db.commit()
+
+        # Spawn retraining thread via FastAPI background task
+        background_tasks.add_task(run_retraining, log_id, get_settings().database_url)
+    else:
+        db.commit()
+
     db.refresh(case)
     return case
 

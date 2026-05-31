@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import hash_password
-from app.models import User, UserRole
+from app.models import User, UserRole, RetrainingState
 
 
 DEMO_USERS = [
@@ -31,3 +31,9 @@ def seed_demo_users(db: Session) -> None:
             )
         )
     db.commit()
+
+    # Seed RetrainingState
+    state = db.scalar(select(RetrainingState).where(RetrainingState.id == 1))
+    if not state:
+        db.add(RetrainingState(id=1, approved_since_last_retrain=0))
+        db.commit()

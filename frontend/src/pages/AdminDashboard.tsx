@@ -51,9 +51,30 @@ export function AdminDashboard() {
   const [userToDelete, setUserToDelete] = useState<NonAdminUser | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const [retrainingStatus, setRetrainingStatus] = useState<{
+    count: number;
+    latest_log: {
+      id: string;
+      status: 'running' | 'completed' | 'failed';
+      model_version_after: string | null;
+      dice_after: number | null;
+      created_at: string | null;
+      completed_at: string | null;
+    } | null;
+  }>({ count: 0, latest_log: null });
+
   useEffect(() => {
     fetchUsers();
+    fetchRetrainingStatus();
+    const interval = setInterval(fetchRetrainingStatus, 5000);
+    return () => clearInterval(interval);
   }, []);
+
+  function fetchRetrainingStatus() {
+    api.get('/admin/retraining/status')
+      .then(r => setRetrainingStatus(r.data))
+      .catch(() => {});
+  }
 
   function fetchUsers() {
     setLoading(true);
@@ -102,6 +123,17 @@ export function AdminDashboard() {
   // Statistics
   const totalSonologists = users.filter(u => u.role === 'sonologist').length;
   const totalReviewers = users.filter(u => u.role === 'expert_reviewer').length;
+
+  const isFormValid = useMemo(() => {
+    if (!modalFullName.trim()) return false;
+    if (!modalUsername.trim()) return false;
+    if (!modalEmail.trim()) return false;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(modalEmail)) return false;
+    if (!editingUser && !modalPassword) return false;
+    if (modalPassword && modalPassword.length < 6) return false;
+    return true;
+  }, [editingUser, modalFullName, modalUsername, modalEmail, modalPassword]);
 
   function openCreateModal() {
     setEditingUser(null);
@@ -230,6 +262,50 @@ export function AdminDashboard() {
             <strong className={`stat-value ${s.cls}`} style={{ marginTop: 8 }}>{s.value}</strong>
           </div>
         ))}
+      </div>
+
+      {/* Retraining Progress Widget */}
+      <div className="card" style={{ marginBottom: 20, padding: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, color: 'var(--text-muted)' }}>
+            Retraining Progress
+          </span>
+          {retrainingStatus.latest_log?.status === 'running' ? (
+            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--pending)' }}>
+              Retraining in progress…
+            </span>
+          ) : (
+            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+              {100 - retrainingStatus.count} more needed
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+          <strong style={{ fontSize: '1.25rem', color: 'var(--text)' }}>
+            {retrainingStatus.count} / 100 corrections
+          </strong>
+          {retrainingStatus.latest_log?.status === 'completed' && retrainingStatus.latest_log.completed_at && (
+            <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+              Last Success: {new Date(retrainingStatus.latest_log.completed_at).toLocaleString()} | Avg Dice: {retrainingStatus.latest_log.dice_after}
+            </span>
+          )}
+          {retrainingStatus.latest_log?.status === 'failed' && retrainingStatus.latest_log.completed_at && (
+            <span style={{ fontSize: '0.8125rem', color: 'var(--danger)' }}>
+              Last Run Failed at {new Date(retrainingStatus.latest_log.completed_at).toLocaleString()}
+            </span>
+          )}
+        </div>
+        <div style={{ width: '100%', height: 8, backgroundColor: 'rgba(0,0,0,0.06)', borderRadius: 4, overflow: 'hidden' }}>
+          <div
+            style={{
+              width: `${Math.min(100, (retrainingStatus.count / 100) * 100)}%`,
+              height: '100%',
+              backgroundColor: retrainingStatus.latest_log?.status === 'running' ? 'var(--in-review)' : 'var(--pending)',
+              borderRadius: 4,
+              transition: 'width 0.4s ease',
+            }}
+          />
+        </div>
       </div>
 
       <div className="card">
@@ -389,7 +465,15 @@ export function AdminDashboard() {
                   name="newUserFullName"
                   type="text"
                   value={modalFullName}
-                  onChange={e => { setModalFullName(e.target.value); setModalErrors(p => ({ ...p, full_name: '' })); }}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setModalFullName(val);
+                    if (!val.trim()) {
+                      setModalErrors(p => ({ ...p, full_name: 'Name is required.' }));
+                    } else {
+                      setModalErrors(p => ({ ...p, full_name: '' }));
+                    }
+                  }}
                   placeholder="Dr. Alexander Light"
                   className={modalErrors.full_name ? 'field-error' : ''}
                   autoComplete="off"
@@ -404,7 +488,15 @@ export function AdminDashboard() {
                   name="newUserLogin"
                   type="text"
                   value={modalUsername}
-                  onChange={e => { setModalUsername(e.target.value); setModalErrors(p => ({ ...p, username: '' })); }}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setModalUsername(val);
+                    if (!val.trim()) {
+                      setModalErrors(p => ({ ...p, username: 'Username is required.' }));
+                    } else {
+                      setModalErrors(p => ({ ...p, username: '' }));
+                    }
+                  }}
                   placeholder="alexlight"
                   className={modalErrors.username ? 'field-error' : ''}
                   autoComplete="off"
@@ -419,7 +511,18 @@ export function AdminDashboard() {
                   name="newUserEmail"
                   type="email"
                   value={modalEmail}
-                  onChange={e => { setModalEmail(e.target.value); setModalErrors(p => ({ ...p, email: '' })); }}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setModalEmail(val);
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (!val.trim()) {
+                      setModalErrors(p => ({ ...p, email: 'Email is required.' }));
+                    } else if (!emailRegex.test(val)) {
+                      setModalErrors(p => ({ ...p, email: 'Invalid email address.' }));
+                    } else {
+                      setModalErrors(p => ({ ...p, email: '' }));
+                    }
+                  }}
                   placeholder="alex.light@supernova.com"
                   className={modalErrors.email ? 'field-error' : ''}
                   autoComplete="off"
@@ -436,7 +539,17 @@ export function AdminDashboard() {
                   name="newUserPass"
                   type="password"
                   value={modalPassword}
-                  onChange={e => { setModalPassword(e.target.value); setModalErrors(p => ({ ...p, password: '' })); }}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setModalPassword(val);
+                    if (!editingUser && !val) {
+                      setModalErrors(p => ({ ...p, password: 'Password is required.' }));
+                    } else if (val && val.length < 6) {
+                      setModalErrors(p => ({ ...p, password: 'Password must be at least 6 characters.' }));
+                    } else {
+                      setModalErrors(p => ({ ...p, password: '' }));
+                    }
+                  }}
                   placeholder={editingUser ? '••••••••' : 'Password (min 6 chars)'}
                   className={modalErrors.password ? 'field-error' : ''}
                   autoComplete="new-password"
@@ -465,9 +578,9 @@ export function AdminDashboard() {
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  disabled={modalSubmitting}
+                  disabled={modalSubmitting || !isFormValid}
                 >
-                  {modalSubmitting ? 'Saving…' : 'Save User Account'}
+                  {modalSubmitting ? 'Saving…' : (editingUser ? 'Save User Account' : 'Create User')}
                 </button>
               </div>
             </form>

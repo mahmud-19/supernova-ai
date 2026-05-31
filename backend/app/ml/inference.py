@@ -12,12 +12,13 @@ logger.setLevel(logging.INFO)
 # ========== PATHS ==========
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 PROJECT_DIR = BACKEND_DIR.parent
-MODELS_DIR = PROJECT_DIR / "Models"
+WEIGHTS_DIR = PROJECT_DIR / "models" / "weights"
 
-ATTENTION_UNET_PATH = MODELS_DIR / "attention  unet model" / "checkpoints" / "best_attention_unet.pth"
-BASE_UNET_PATH = MODELS_DIR / "BaseUnet" / "best_base_unet.pth"
-DEEPLAB_V3_PATH = MODELS_DIR / "DeepLab V3+" / "checkpoints" / "best_model.pth"
-MOBILENET_V3_PATH = MODELS_DIR / "MobileVnet3" / "best_model.pth"
+ATTENTION_UNET_PATH = WEIGHTS_DIR / "attention_unet.pth"
+BASE_UNET_PATH = WEIGHTS_DIR / "base_unet.pth"
+DEEPLAB_V3_PATH = WEIGHTS_DIR / "deeplabv3.pth"
+MOBILENET_V3_PATH = WEIGHTS_DIR / "mobilenetv3.pth"
+MOBILENET_V2_PATH = WEIGHTS_DIR / "mobilenetv2.pth"
 
 
 @dataclass
@@ -260,6 +261,27 @@ def get_models() -> dict:
     else:
         logger.warning(f"ML: MobileNetV3 not found at {MOBILENET_V3_PATH}")
 
+    # 5. MobileNetV2
+    if MOBILENET_V2_PATH.exists():
+        try:
+            model = smp.Unet(
+                encoder_name='mobilenet_v2',
+                encoder_weights=None,
+                in_channels=1,
+                classes=1,
+                activation=None
+            ).to(device)
+            ckpt = torch.load(MOBILENET_V2_PATH, map_location=device)
+            state = ckpt['model_state_dict'] if isinstance(ckpt, dict) and 'model_state_dict' in ckpt else ckpt
+            model.load_state_dict(state)
+            model.eval()
+            loaded['MobileNetV2'] = model
+            logger.info("ML: MobileNetV2 loaded successfully")
+        except Exception as e:
+            logger.error(f"ML: Failed to load MobileNetV2: {e}")
+    else:
+        logger.warning(f"ML: MobileNetV2 not found at {MOBILENET_V2_PATH}")
+
     _MODELS_CACHE = loaded
     return loaded
 
@@ -318,7 +340,7 @@ def run_mock_inference(preprocessed_image_path: str) -> InferenceOutput:
         case = db.scalar(select(Case).where(Case.patient_id == patient_id))
         case_id = case.id if case else "fallback"
 
-    case_dir = get_settings().storage_dir / str(case_id)
+    case_dir = get_settings().storage_dir / patient_id
     case_dir.mkdir(parents=True, exist_ok=True)
     version = _next_version(case_dir)
     mask_path = case_dir / f"mask_v{version}.png"
@@ -387,7 +409,7 @@ def run_inference(preprocessed_image_path: str) -> InferenceOutput:
             case = db.scalar(select(Case).where(Case.patient_id == patient_id))
             case_id = case.id if case else "fallback"
 
-        case_dir = get_settings().storage_dir / str(case_id)
+        case_dir = get_settings().storage_dir / patient_id
         case_dir.mkdir(parents=True, exist_ok=True)
         version = _next_version(case_dir)
         mask_path = case_dir / f"mask_v{version}.png"

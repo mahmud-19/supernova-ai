@@ -122,3 +122,21 @@ class AuditLog(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     user = relationship("User")
+
+
+class RetrainingLog(Base):
+    __tablename__ = "retraining_logs"
+
+    id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    status: Mapped[str] = mapped_column(String(20), default="running")
+    model_version_after: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    dice_after: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RetrainingState(Base):
+    __tablename__ = "retraining_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    approved_since_last_retrain: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
